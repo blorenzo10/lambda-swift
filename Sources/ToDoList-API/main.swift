@@ -17,42 +17,35 @@ Lambda.run { (context,
               request: In,
               callback: @escaping (Result<Out, Error>) -> Void) in
     
-    let path = request.context.http.path
-    let method = request.context.http.method
+    let routeKey = request.routeKey
     
-    switch path {
+    switch routeKey {
     
-    case "/todoitems":
+    case "GET /todoitems":
+        let items = ToDoItem.getToDoList()
+        let bodyOutput = try! JSONEncoder().encodeAsString(items)
+        let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+        callback(.success(output))
         
-        switch method {
-        case .POST:
-            do {
-                let input = try JSONDecoder().decode(ToDoItem.self, from: request.body ?? "")
-                let bodyOutput = try JSONEncoder().encodeAsString(input)
-                let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
-                callback(.success(output))
-            } catch {
-                callback(.success(Out(statusCode: .badRequest)))
-            }
+    case "GET /todoitems/{id}":
+        if let idString = request.pathParameters?["id"], let id = Int(idString),
+           let item = ToDoItem.getItem(with: id) {
             
-        case .GET:
-            if let idString = request.pathParameters?["id"], let id = Int(idString) {
-                if let item = ToDoItem.getItem(with: id) {
-                    let bodyOutput = try! JSONEncoder().encodeAsString(item)
-                    let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
-                    callback(.success(output))
-                } else {
-                    callback(.success(Out(statusCode: .notFound)))
-                }
-            } else {
-                let items = ToDoItem.getToDoList()
-                let bodyOutput = try! JSONEncoder().encodeAsString(items)
-                let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
-                callback(.success(output))
-            }
-            
-        default:
+            let bodyOutput = try! JSONEncoder().encodeAsString(item)
+            let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+            callback(.success(output))
+        } else {
             callback(.success(Out(statusCode: .notFound)))
+        }
+        
+    case "POST /todoitems":
+        do {
+            let input = try JSONDecoder().decode(ToDoItem.self, from: request.body ?? "")
+            let bodyOutput = try JSONEncoder().encodeAsString(input)
+            let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+            callback(.success(output))
+        } catch {
+            callback(.success(Out(statusCode: .badRequest)))
         }
         
     default:
