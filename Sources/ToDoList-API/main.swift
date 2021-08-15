@@ -8,76 +8,56 @@
 import Foundation
 import AWSLambdaRuntime
 import AWSLambdaEvents
-import NIO
-import SotoCore
-import SotoDynamoDB
 
-struct LambdaHandler: EventLoopLambdaHandler {
-    typealias In = APIGateway.V2.Request
-    typealias Out = APIGateway.V2.Response
-    
-    let dbManager: DBManager
-    
-    init(context: Lambda.InitializationContext) {
-        
-        let awsclient = AWSClient(
-            credentialProvider: .static(
-                accessKeyId: Config.sharedInstance.dynamoDBKeyId,
-                secretAccessKey: Config.sharedInstance.dynamoDBAccessKey
-            ),
-            retryPolicy: .noRetry,
-            httpClientProvider: .createNewWithEventLoopGroup(context.eventLoop)
-        )
-        
-        let dynamoDB = DynamoDB(client: awsclient)
-        self.dbManager = DynamoDBManager(database: dynamoDB)
-    }
-    
-    
-    func handle(context: Lambda.Context, event: In) -> EventLoopFuture<Out> {
-        
-        let path = event.context.http.path
-        let method = event.context.http.method
-        
-        switch path {
+typealias In = APIGateway.V2.Request
+typealias Out = APIGateway.V2.Response
 
-        case Routes.signup.path:
-            
-            switch method {
-            case .POST:
-                return signup(context, event)
-                
-            default:
-                return context.eventLoop.makeSucceededFuture(Out(statusCode: .notFound))
+
+Lambda.run { (context,
+              request: In,
+              callback: @escaping (Result<Out, Error>) -> Void) in
+    
+    let path = request.context.http.path
+    let method = request.context.http.method
+    
+    switch path {
+    
+    case "/todoitems":
+        
+        switch method {
+        case .POST:
+            do {
+                let input = try JSONDecoder().decode(ToDoItem.self, from: request.body ?? "")
+                let bodyOutput = try JSONEncoder().encodeAsString(input)
+                let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+                callback(.success(output))
+            } catch {
+                callback(.success(Out(statusCode: .badRequest)))
             }
             
-            
-        case Routes.todoitem.path:
-            
-            switch event.context.http.method {
-            
-            case .GET:
-                if let id = event.pathParameters?["id"] {
-                    return retrieveItem(id, context, event)
+        case .GET:
+            if let idString = request.pathParameters?["id"], let id = Int(idString) {
+                if let item = ToDoItem.getItem(with: id) {
+                    let bodyOutput = try! JSONEncoder().encodeAsString(item)
+                    let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+                    callback(.success(output))
                 } else {
-                    return retrieveAllItems(context)
+                    callback(.success(Out(statusCode: .notFound)))
                 }
-                
-            case .POST:
-                return createNewItem(context, event)
-                
-            default:
-                return context.eventLoop.makeSucceededFuture(Out(statusCode: .notFound))
+            } else {
+                let items = ToDoItem.getToDoList()
+                let bodyOutput = try! JSONEncoder().encodeAsString(items)
+                let output = Out(statusCode: .ok, headers: ["content-type": "application/json"], body: bodyOutput)
+                callback(.success(output))
             }
             
         default:
-            return context.eventLoop.makeSucceededFuture(Out(statusCode: .notFound))
+            callback(.success(Out(statusCode: .notFound)))
         }
+        
+    default:
+        callback(.success(Out(statusCode: .notFound)))
     }
 }
 
-Lambda.run(LambdaHandler.init)
 
-//Lambda.run { (context, request: APIGateway.V2.Request, callback: @escaping (Result<APIGateway.V2.Response, Error>) -> Void) in
-//    callback(.success(APIGateway.V2.Response(statusCode: .ok)))
-//}

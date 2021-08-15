@@ -13,7 +13,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", .upToNextMajor(from:"0.3.0")),
-        .package(url: "https://github.com/soto-project/soto.git", .upToNextMajor(from: "5.0.0")),
     ],
     targets: [
         .target(
@@ -21,10 +20,6 @@ let package = Package(
             dependencies: [
                 .product(name: "AWSLambdaRuntime", package: "swift-aws-lambda-runtime"),
                 .product(name: "AWSLambdaEvents", package: "swift-aws-lambda-runtime"),
-                .product(name: "SotoDynamoDB", package: "soto"),
-            ],
-            resources: [
-                .process("Config.plist")
             ]
         ),
     ]
